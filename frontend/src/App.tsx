@@ -2,17 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import './App.css';
 import {
-  AreaChart,
-  Area,
   ResponsiveContainer,
   Tooltip,
-  XAxis,
-  YAxis,
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
 } from 'recharts';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api';
@@ -23,281 +17,139 @@ interface DashboardSummary {
   problematicVehicles: number;
   healthyVehicles: number;
   appointmentsBooked: number;
-  fleetHealthScore: number; // percentage 0-100
+  fleetHealthScore: number;
   activeAlerts: number;
   serviceBookings: number;
 }
 
-interface DeviceEvent {
-  id: string;
-  eventType: string;
-  occurredAt: string;
-  vehicle: {
-    label: string;
-  };
-  payload: Record<string, any>;
-}
+const STATIC_SUMMARY: DashboardSummary = {
+  totalVehicles: 50,
+  healthyVehicles: 43,
+  problematicVehicles: 7,
+  appointmentsBooked: 9,
+  fleetHealthScore: 82,
+  activeAlerts: 7,
+  serviceBookings: 9,
+};
 
 const donutColors = ['#36B37E', '#FFAB00', '#FF5630'];
-const navItems = ['Live', 'Alerts', 'Dashboard', 'Maintenance'] as const;
+const navItems = ['Dashboard', 'Fleet Vehicles', 'Notifications', 'Appointments', 'Service Stations', 'Settings'] as const;
 type NavTab = (typeof navItems)[number];
 
-const STATIC_EVENTS: DeviceEvent[] = [
-  {
-    id: 'vh101-ign-on',
-    eventType: 'tripstart',
-    occurredAt: '2025-12-04T10:00:00Z',
-    vehicle: { label: 'VH-101 Ops 1' },
-    payload: {
-      eventLabel: 'Ignition On',
-      location: 'Washington National Pike, Boyds, MD',
-      speedMph: 0,
-    },
-  },
-  {
-    id: 'vh101-gps-idle',
-    eventType: 'gps',
-    occurredAt: '2025-12-04T10:02:00Z',
-    vehicle: { label: 'VH-101 Ops 1' },
-    payload: {
-      eventLabel: 'GPS Fix (Idling)',
-      location: 'Boyds Depot, MD',
-      speedMph: 8,
-    },
-  },
-  {
-    id: 'vh101-gps-hwy',
-    eventType: 'gps',
-    occurredAt: '2025-12-04T10:05:00Z',
-    vehicle: { label: 'VH-101 Ops 1' },
-    payload: {
-      eventLabel: 'GPS Fix (Cruising)',
-      location: 'Washington National Pike, Boyds, MD',
-      speedMph: 64,
-    },
-  },
-  {
-    id: 'vh101-dtc',
-    eventType: 'dtc',
-    occurredAt: '2025-12-04T10:06:30Z',
-    vehicle: { label: 'VH-101 Ops 1' },
-    payload: {
-      eventLabel: 'DTC P0420',
-      location: 'Boyds, MD',
-      code: 'P0420',
-      severity: 'High',
-      description: 'Catalyst efficiency below threshold',
-    },
-  },
-  {
-    id: 'vh101-ign-off',
-    eventType: 'tripend',
-    occurredAt: '2025-12-04T10:20:00Z',
-    vehicle: { label: 'VH-101 Ops 1' },
-    payload: {
-      eventLabel: 'Ignition Off',
-      location: 'Gaithersburg, MD',
-      speedMph: 0,
-    },
-  },
-  {
-    id: 'vh102-ign-on',
-    eventType: 'tripstart',
-    occurredAt: '2025-12-04T09:40:00Z',
-    vehicle: { label: 'VH-102 Ops 2' },
-    payload: {
-      eventLabel: 'Ignition On',
-      location: 'Myersville Yard, MD',
-      speedMph: 0,
-    },
-  },
-  {
-    id: 'vh102-gps-hwy',
-    eventType: 'gps',
-    occurredAt: '2025-12-04T09:50:00Z',
-    vehicle: { label: 'VH-102 Ops 2' },
-    payload: {
-      eventLabel: 'GPS Fix (Highway 75 MPH)',
-      location: '3002 Ventrie Ct, Myersville, MD',
-      speedMph: 75,
-    },
-  },
-  {
-    id: 'vh102-dtc',
-    eventType: 'dtc',
-    occurredAt: '2025-12-04T09:52:30Z',
-    vehicle: { label: 'VH-102 Ops 2' },
-    payload: {
-      eventLabel: 'DTC P0301',
-      location: 'Myersville, MD',
-      code: 'P0301',
-      severity: 'Medium',
-      description: 'Cylinder 1 misfire detected',
-    },
-  },
-  {
-    id: 'vh102-ign-off',
-    eventType: 'tripend',
-    occurredAt: '2025-12-04T10:05:00Z',
-    vehicle: { label: 'VH-102 Ops 2' },
-    payload: {
-      eventLabel: 'Ignition Off',
-      location: 'Mount Airy, MD',
-      speedMph: 0,
-    },
-  },
-  {
-    id: 'vh103-parked',
-    eventType: 'gps',
-    occurredAt: '2025-12-04T10:15:00Z',
-    vehicle: { label: 'VH-103 Ops 3' },
-    payload: {
-      eventLabel: 'GPS Fix (Stopped)',
-      location: '7631 Airpark Rd, Gaithersburg, MD',
-      speedMph: 0,
-    },
-  },
-];
-
-type AlertItem = {
+type Vehicle = {
   id: string;
-  vehicleLabel: string;
-  code: string;
-  severity: 'High' | 'Medium' | 'Low';
-  description: string;
-  when: string;
+  name: string;
+  licensePlate: string;
+  healthScore: number;
   location: string;
-  status: 'Open' | 'In Review' | 'Closed';
+  lastUpdated: string;
+  dtcCodes: number;
+  alerts: number;
+  status: 'warning' | 'critical' | 'healthy';
 };
 
-type ProblemVehicle = {
+const FLEET_VEHICLES: Vehicle[] = [
+  {
+    id: '1',
+    name: 'Peterbilt 579 #102',
+    licensePlate: 'TX-9583-PB',
+    healthScore: 68,
+    location: 'Dallas, TX',
+    lastUpdated: '12 min ago',
+    dtcCodes: 1,
+    alerts: 1,
+    status: 'warning',
+  },
+  {
+    id: '2',
+    name: 'Volvo VNL 860 #104',
+    licensePlate: 'TX-3892-VL',
+    healthScore: 71,
+    location: 'Austin, TX',
+    lastUpdated: '3 min ago',
+    dtcCodes: 1,
+    alerts: 2,
+    status: 'warning',
+  },
+  {
+    id: '3',
+    name: 'Volvo #150',
+    licensePlate: 'TX-1043-VO',
+    healthScore: 58,
+    location: 'San Antonio, TX',
+    lastUpdated: '10 min ago',
+    alerts: 1,
+    dtcCodes: 0,
+    status: 'warning',
+  },
+  {
+    id: '4',
+    name: 'Freightliner Cascadia #101',
+    licensePlate: 'TX-4521-FL',
+    healthScore: 45,
+    location: 'Houston, TX',
+    lastUpdated: '5 min ago',
+    dtcCodes: 2,
+    alerts: 3,
+    status: 'critical',
+  },
+];
+
+type VehicleRequiringAttention = {
   id: string;
-  label: string;
+  name: string;
   location: string;
-  status: 'Problematic' | 'Healthy';
-  dtcs: { code: string; description: string; severity: string }[];
+  status: 'Critical' | 'Warning';
 };
 
-type MaintenanceItem = {
+const VEHICLES_REQUIRING_ATTENTION: VehicleRequiringAttention[] = [
+  {
+    id: '1',
+    name: 'Freightliner Cascadia #101',
+    location: 'Houston, TX',
+    status: 'Critical',
+  },
+  {
+    id: '2',
+    name: 'Peterbilt 579 #102',
+    location: 'Dallas, TX',
+    status: 'Warning',
+  },
+  {
+    id: '3',
+    name: 'Volvo VNL 860 #104',
+    location: 'Austin, TX',
+    status: 'Warning',
+  },
+];
+
+type Notification = {
   id: string;
-  vehicleLabel: string;
-  dtcSummary: string;
-  status: 'Scheduled' | 'Completed' | 'In Progress';
-  scheduledFor: string;
-  source: 'Firestone API' | 'Manual';
-  location: string;
+  title: string;
+  summary: string;
+  time: string;
 };
 
-const ALERT_ITEMS: AlertItem[] = [
+const NOTIFICATIONS: Notification[] = [
   {
-    id: 'alert-p0420',
-    vehicleLabel: 'VH-101 Ops 1',
-    code: 'P0420',
-    severity: 'High',
-    description: 'Catalyst efficiency below threshold',
-    when: '5 min ago',
-    location: 'Boyds, MD',
-    status: 'Open',
+    id: '1',
+    title: 'Weekly Fleet Health Summary',
+    summary: '2 vehicles require immediate attention. 3 vehicles scheduled for maintenance.',
+    time: '2 hours ago',
   },
   {
-    id: 'alert-p0301',
-    vehicleLabel: 'VH-102 Ops 2',
-    code: 'P0301',
-    severity: 'Medium',
-    description: 'Cylinder 1 misfire detected',
-    when: '18 min ago',
-    location: 'Myersville, MD',
-    status: 'In Review',
-  },
-];
-
-const PROBLEM_VEHICLES: ProblemVehicle[] = [
-  {
-    id: 'VH-101',
-    label: 'VH-101 Ops 1',
-    location: 'Gaithersburg, MD',
-    status: 'Problematic',
-    dtcs: [
-      {
-        code: 'P0420',
-        description: 'Catalyst efficiency below threshold',
-        severity: 'High',
-      },
-    ],
-  },
-  {
-    id: 'VH-102',
-    label: 'VH-102 Ops 2',
-    location: 'Mount Airy, MD',
-    status: 'Problematic',
-    dtcs: [
-      {
-        code: 'P0301',
-        description: 'Cylinder 1 misfire detected',
-        severity: 'Medium',
-      },
-    ],
-  },
-];
-
-const HEALTHY_VEHICLES: ProblemVehicle[] = [
-  {
-    id: 'VH-103',
-    label: 'VH-103 Ops 3',
-    location: 'Gaithersburg HQ, MD',
-    status: 'Healthy',
-    dtcs: [],
-  },
-];
-
-const STATIC_SUMMARY: DashboardSummary = {
-  // Numbers inspired by design mocks
-  totalVehicles: 1250,
-  healthyVehicles: 1045,
-  problematicVehicles: 205,
-  appointmentsBooked: 178,
-  fleetHealthScore: 83.6,
-  activeAlerts: 205,
-  serviceBookings: 178,
-};
-
-const MAINTENANCE_ITEMS: MaintenanceItem[] = [
-  {
-    id: 'mnt-1',
-    vehicleLabel: 'VH-101 Ops 1',
-    dtcSummary: 'P0420 – Catalyst efficiency below threshold',
-    status: 'Scheduled',
-    scheduledFor: 'Dec 06, 10:30 AM',
-    source: 'Firestone API',
-    location: 'Bridgestone – Gaithersburg, MD',
-  },
-  {
-    id: 'mnt-2',
-    vehicleLabel: 'VH-102 Ops 2',
-    dtcSummary: 'P0301 – Cylinder 1 misfire detected',
-    status: 'In Progress',
-    scheduledFor: 'Dec 05, 02:00 PM',
-    source: 'Firestone API',
-    location: 'Bridgestone – Frederick, MD',
-  },
-  {
-    id: 'mnt-3',
-    vehicleLabel: 'VH-103 Ops 3',
-    dtcSummary: 'Preventive inspection – 7,500 mile service',
-    status: 'Completed',
-    scheduledFor: 'Dec 02, 09:00 AM',
-    source: 'Manual',
-    location: 'Bridgestone – Gaithersburg, MD',
+    id: '2',
+    title: 'New DTC Alert',
+    summary: 'P0420 detected on Freightliner Cascadia #101',
+    time: '5 hours ago',
   },
 ];
 
 function App() {
   const [summary, setSummary] = useState<DashboardSummary | null>(STATIC_SUMMARY);
-  const [events, setEvents] = useState<DeviceEvent[]>(STATIC_EVENTS);
-  const [activeTab, setActiveTab] = useState<NavTab>('Live');
-  const [drilldown, setDrilldown] = useState<'none' | 'problematic' | 'healthy'>('none');
-  const [timeframe] = useState<'7d' | '30d' | '90d'>('7d');
-  const [segment, setSegment] = useState<'all' | 'delivery' | 'service'>('all');
+  const [activeTab, setActiveTab] = useState<NavTab>('Dashboard');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'warning' | 'critical'>('warning');
 
   useEffect(() => {
     async function bootstrap() {
@@ -312,450 +164,318 @@ function App() {
     bootstrap();
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setEvents((prev) => {
-        if (prev.length === 0) return prev;
-        const [first, ...rest] = prev;
-        const rotated: DeviceEvent[] = [
-          ...rest,
-          {
-            ...first,
-            occurredAt: new Date().toISOString(),
-          },
-        ];
-        return rotated;
-      });
-    }, 8000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-
-
   const donutData = useMemo(() => {
     if (!summary) return [];
+    const healthy = summary.healthyVehicles;
+    const predictive = 3; // AI predicted issues
+    const tireHealth = 4; // Tire health issues
     return [
-      { name: 'Healthy', value: summary.healthyVehicles },
-      { name: 'In Review', value: summary.problematicVehicles },
-      { name: 'Unknown', value: Math.max(summary.totalVehicles - summary.healthyVehicles - summary.problematicVehicles, 0) },
+      { name: 'Healthy', value: healthy },
+      { name: 'Predictive Maintenance', value: predictive },
+      { name: 'Tire Health Issues', value: tireHealth },
     ];
   }, [summary]);
 
-  const severityBarData = useMemo(
-    () => [
-      { label: 'High', value: PROBLEM_VEHICLES.filter((v) => v.dtcs.some((d) => d.severity === 'High')).length },
-      { label: 'Medium', value: PROBLEM_VEHICLES.filter((v) => v.dtcs.some((d) => d.severity === 'Medium')).length },
-      { label: 'Low', value: PROBLEM_VEHICLES.filter((v) => v.dtcs.some((d) => d.severity === 'Low')).length },
-    ],
-    [],
-  );
+  const filteredVehicles = useMemo(() => {
+    let filtered = FLEET_VEHICLES;
+    
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (v) =>
+          v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          v.licensePlate.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter((v) => v.status === filterStatus);
+    }
+    
+    return filtered;
+  }, [searchQuery, filterStatus]);
 
-  const maintenanceBarData = useMemo(
-    () => [
-      { label: 'Completed', value: MAINTENANCE_ITEMS.filter((m) => m.status === 'Completed').length },
-      { label: 'Scheduled', value: MAINTENANCE_ITEMS.filter((m) => m.status === 'Scheduled').length },
-      { label: 'In Progress', value: MAINTENANCE_ITEMS.filter((m) => m.status === 'In Progress').length },
-    ],
-    [],
-  );
-
-  const alerts = useMemo(
-    () => ALERT_ITEMS,
-    [],
-  );
+  const handleNavigateToFleetVehicles = () => {
+    setActiveTab('Fleet Vehicles');
+  };
 
   return (
     <div className="app-shell">
-      <header className="top-nav">
-        <div className="brand">
-          <span className="brand-mark">Azuga</span>Azuga
-          <span className="cid">CID: 1059</span>
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="logo">
+            <div className="logo-icon"></div>
+          </div>
+          <div className="logo-text">
+            <div className="logo-title">FindMyService</div>
+            <div className="logo-subtitle">by Bridgestone</div>
+          </div>
         </div>
-        <nav>
+        <nav className="sidebar-nav">
           {navItems.map((item) => (
             <button
               key={item}
-              className={`nav-btn ${item === activeTab ? 'active' : ''}`}
+              className={`nav-item ${item === activeTab ? 'active' : ''}`}
               onClick={() => setActiveTab(item)}
             >
-              {item}
+              {item === 'Dashboard' && <span className="nav-icon">📊</span>}
+              {item === 'Fleet Vehicles' && <span className="nav-icon">🚛</span>}
+              {item === 'Notifications' && (
+                <>
+                  <span className="nav-icon">🔔</span>
+                  <span className="notification-badge">2</span>
+                </>
+              )}
+              {item === 'Appointments' && <span className="nav-icon">📅</span>}
+              {item === 'Service Stations' && <span className="nav-icon">📍</span>}
+              {item === 'Settings' && <span className="nav-icon">⚙️</span>}
+              <span className="nav-label">{item}</span>
             </button>
           ))}
         </nav>
-        <div className="user-pill">
-          <span className="status-dot" />
-          <span>Hi, Narayana Reddy</span>
-        </div>
-      </header>
+      </aside>
 
-      <main
-        className={`layout-grid ${
-          activeTab === 'Live'
-            ? 'live-layout'
-            : activeTab === 'Dashboard'
-            ? 'dashboard-layout'
-            : 'single-column'
-        }`}
-      >
-        {activeTab === 'Live' && (
-          <>
-            <section className="event-panel">
-              <div className="panel-head">
-                <h2>Live</h2>
-                <div className="filters">
-                  <button className="ghost">Events</button>
-                  <button className="ghost">Group/Vehicle</button>
-                  <button className="ghost">Tags</button>
-                </div>
-              </div>
-              <div className="event-list">
-                {events.map((event) => {
-                  const label = event.payload?.eventLabel ?? event.eventType;
-                  const speed = typeof event.payload?.speedMph === 'number' ? Math.round(event.payload.speedMph) : null;
-                  return (
-                    <article key={event.id} className="event-card">
-                      <div>
-                        <p className="vehicle-label">{event.vehicle.label}</p>
-                        <p className="event-type">{label}</p>
-                        {speed !== null && <span className="speed-pill">{speed} MPH</span>}
-                      </div>
-                      <div>
-                        <p className="muted">
-                          {new Date(event.occurredAt).toLocaleString(undefined, {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                        <p className="muted small">{event.payload?.location ?? 'Unknown location'}</p>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="map-panel">
-              <div className="map-toolbar">
-                <div>
-                  <button className="ghost">Map Options</button>
-                  <button className="ghost">Legend</button>
-                  <button className="ghost">Recenter</button>
-                </div>
-                <button className="ghost">Live Update Settings</button>
-              </div>
-              <div className="map-placeholder">
-                <p>Montpelier Community Association</p>
-              </div>
-              <div className="quick-actions">
-                <button className="primary">Find Nearest Vehicle</button>
-                <button className="secondary">Send Track-Me Links</button>
-              </div>
-            </section>
-          </>
-        )}
-
-        {activeTab === 'Alerts' && (
-          <section className="alerts-panel">
-            <div className="panel-head">
-              <h2>Alerts</h2>
-              <span className="badge">{alerts.length} open</span>
-            </div>
-            <div className="alerts-list">
-              {alerts.map((alert) => (
-                <article key={alert.id} className="alert-card">
-                  <div>
-                    <p className="vehicle-label">{alert.vehicleLabel}</p>
-                    <p className="event-type">DTC {alert.code}</p>
-                    <p className="muted small">{alert.description}</p>
-                  </div>
-                  <div className="alert-meta">
-                    <span className={`pill ${alert.severity === 'High' ? 'pill-danger' : 'pill-warning'}`}>
-                      {alert.severity} Severity
-                    </span>
-                    <span className="muted small">{alert.when}</span>
-                    <span className="muted small">{alert.location}</span>
-                    <span className="pill pill-outline">{alert.status}</span>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
+      <main className="main-content">
         {activeTab === 'Dashboard' && (
-          <section className="dashboard-panel">
-            <div className="panel-head">
-              <h2>Dashboard</h2>
-            </div>
-
-            <div className="kpi-row">
-              <button
-                type="button"
-                className="kpi-card"
-                onClick={() => setDrilldown('none')}
-              >
-                <p className="kpi-label">Total Vehicles</p>
-                <p className="kpi-value">{summary?.totalVehicles ?? '-'}</p>
-                <p className="kpi-sub">Fleet size across all segments</p>
-              </button>
-              <button
-                type="button"
-                className="kpi-card"
-                onClick={() => setDrilldown('healthy')}
-              >
-                <p className="kpi-label">Fleet Health Score</p>
-                <p className="kpi-value">{summary?.fleetHealthScore.toFixed(1)}%</p>
-                <p className="kpi-sub kpi-trend positive">↑ 3.2% vs last period</p>
-              </button>
-              <button
-                type="button"
-                className="kpi-card"
-                onClick={() => setActiveTab('Alerts')}
-              >
-                <p className="kpi-label">Active Alerts</p>
-                <p className="kpi-value">{summary?.activeAlerts ?? '-'}</p>
-                <p className="kpi-sub kpi-trend negative">↓ 8% after campaigns</p>
-              </button>
-              <button
-                type="button"
-                className="kpi-card"
-                onClick={() => setActiveTab('Maintenance')}
-              >
-                <p className="kpi-label">Service Bookings</p>
-                <p className="kpi-value">{summary?.serviceBookings ?? '-'}</p>
-                <p className="kpi-sub kpi-trend positive">↑ 24% vs last month</p>
-              </button>
-            </div>
-
-            <div className="stats">
-              <button
-                type="button"
-                className="stat-card"
-                onClick={() => setDrilldown('problematic')}
-              >
-                <p className="stat-label">Problematic Vehicles</p>
-                <p className="stat-value warning">{summary?.problematicVehicles ?? '-'}</p>
-              </button>
-              <button
-                type="button"
-                className="stat-card"
-                onClick={() => setDrilldown('healthy')}
-              >
-                <p className="stat-label">No Issue Vehicles</p>
-                <p className="stat-value ok">{summary?.healthyVehicles ?? '-'}</p>
-              </button>
-              <div className="stat-card passive">
-                <p className="stat-label">Total Active</p>
-                <p className="stat-value">{summary?.totalVehicles ?? '-'}</p>
+          <div className="dashboard-container">
+            <div className="dashboard-header">
+              <div>
+                <h1 className="dashboard-title">Fleet Dashboard</h1>
+                <p className="dashboard-subtitle">AI-Powered Predictive Maintenance Overview</p>
+              </div>
+              <div className="dashboard-status">
+                <span className="status-indicator">
+                  <span className="status-icon">⚡</span>
+                  AI Analysis Active
+                </span>
+                <span className="last-updated">Last updated: Just now</span>
               </div>
             </div>
 
-           
-
-            <div className="chart-card">
-              <div className="chart-head">
-                <div>
-                  <strong>Vehicle Health Status</strong>
-                  <p className="muted small">
-                    Healthy vs problematic vehicles ({summary?.healthyVehicles ?? 0} healthy /{' '}
-                    {summary?.problematicVehicles ?? 0} problematic)
-                  </p>
-                </div>
-                <div className="pill-toggle-group">
-                  <button
-                    type="button"
-                    className={`pill-toggle ${segment === 'all' ? 'active' : ''}`}
-                    onClick={() => setSegment('all')}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    className={`pill-toggle ${segment === 'delivery' ? 'active' : ''}`}
-                    onClick={() => setSegment('delivery')}
-                  >
-                    Delivery
-                  </button>
-                  <button
-                    type="button"
-                    className={`pill-toggle ${segment === 'service' ? 'active' : ''}`}
-                    onClick={() => setSegment('service')}
-                  >
-                    Service
-                  </button>
+            <div className="metrics-row">
+              <div className="metric-card" onClick={handleNavigateToFleetVehicles} style={{ cursor: 'pointer' }}>
+                <div className="metric-content">
+                  <div>
+                    <p className="metric-label">Total Fleet</p>
+                    <p className="metric-value">{summary?.totalVehicles ?? 50}</p>
+                    <p className="metric-sub">Avg Health: {summary?.fleetHealthScore ?? 82}%</p>
+                  </div>
+                  <div className="metric-icon">🚛🚛</div>
                 </div>
               </div>
-              <div className="chart-body donut">
-                {summary ? (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={80} paddingAngle={2}>
-                        {donutData.map((entry, index) => (
-                          <Cell key={`cell-${entry.name}`} fill={donutColors[index % donutColors.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="muted">Loading utilization...</p>
-                )}
-                <div className="legend">
-                  <span className="legend-dot healthy" /> Healthy
-                  <span className="legend-dot warning" /> Problematic
-                  <span className="legend-dot neutral" /> Unknown
+
+              <div className="metric-card predictive" onClick={handleNavigateToFleetVehicles} style={{ cursor: 'pointer' }}>
+                <div className="metric-content">
+                  <div>
+                    <p className="metric-label">Predictive Maintenance</p>
+                    <p className="metric-value">3</p>
+                    <p className="metric-sub">AI predicted issues</p>
+                  </div>
+                  <div className="metric-icon warning">⚠️</div>
                 </div>
-                <div className="chart-footer">
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => {
-                      setActiveTab('Alerts');
-                    }}
-                  >
-                    View active DTC alerts
-                  </button>
+              </div>
+
+              <div className="metric-card tire-health" onClick={handleNavigateToFleetVehicles} style={{ cursor: 'pointer' }}>
+                <div className="metric-content">
+                  <div>
+                    <p className="metric-label">Tire Health</p>
+                    <p className="metric-value">4</p>
+                    <p className="metric-sub">Requires attention</p>
+                  </div>
+                  <div className="metric-icon critical">🔴</div>
+                </div>
+              </div>
+
+              <div className="metric-card services" onClick={handleNavigateToFleetVehicles} style={{ cursor: 'pointer' }}>
+                <div className="metric-content">
+                  <div>
+                    <p className="metric-label">Upcoming Services</p>
+                    <p className="metric-value">{summary?.serviceBookings ?? 9}</p>
+                    <p className="metric-sub">Scheduled maintenance</p>
+                  </div>
+                  <div className="metric-icon">🔧</div>
                 </div>
               </div>
             </div>
 
-            <div className="chart-card">
-              <div className="chart-head">
-                <strong>DTC severity mix</strong>
-                <span className="muted small">Last 7 days</span>
-              </div>
-              <div className="chart-body">
-                <ResponsiveContainer height={180} width="100%">
-                  <BarChart data={severityBarData}>
-                    <XAxis dataKey="label" stroke="#94a3b8" />
-                    <YAxis allowDecimals={false} stroke="#94a3b8" />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                      <Cell fill="#ef4444" />
-                      <Cell fill="#f97316" />
-                      <Cell fill="#22c55e" />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="chart-footer">
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => setDrilldown('problematic')}
-                >
-                  Drill into vehicles with DTCs
-                </button>
-              </div>
-            </div>
-
-            <div className="chart-card">
-              <div className="chart-head">
-                <strong>Maintenance pipeline</strong>
-                <span className="muted small">From Firestone & manual bookings</span>
-              </div>
-              <div className="chart-body">
-                <ResponsiveContainer height={180} width="100%">
-                  <BarChart data={maintenanceBarData}>
-                    <XAxis dataKey="label" stroke="#94a3b8" />
-                    <YAxis allowDecimals={false} stroke="#94a3b8" />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#0ea5e9" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="chart-footer">
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => setActiveTab('Maintenance')}
-                >
-                  View maintenance work orders
-                </button>
-              </div>
-            </div>
-
-            <div className="chart-card drilldown-card">
-              <div className="chart-head">
-                <strong>Vehicle details</strong>
-                {drilldown === 'problematic' && <span className="pill pill-danger">Problematic vehicles</span>}
-                {drilldown === 'healthy' && <span className="pill pill-success">No issue vehicles</span>}
-              </div>
-              <div className="drilldown-body">
-                {drilldown === 'none' && <p className="muted">Click a metric to see the related vehicles and DTCs.</p>}
-                {drilldown === 'problematic' && (
-                  <ul className="drilldown-list">
-                    {PROBLEM_VEHICLES.map((vehicle) => (
-                      <li key={vehicle.id} className="drilldown-item">
-                        <div>
-                          <strong>{vehicle.label}</strong>
-                          <p className="muted small">{vehicle.location}</p>
-                        </div>
-                        <div className="dtc-tags">
-                          {vehicle.dtcs.map((dtc) => (
-                            <span key={dtc.code} className="pill pill-danger">
-                              {dtc.code} – {dtc.description}
-                            </span>
+            <div className="fleet-health-section">
+              <h2 className="section-title">Fleet Health Distribution</h2>
+              <p className="section-subtitle">Click on a segment to view vehicles</p>
+              <div className="donut-chart-container">
+                <div className="donut-chart-wrapper">
+                  {summary && (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={80}
+                          outerRadius={120}
+                          paddingAngle={2}
+                          onClick={handleNavigateToFleetVehicles}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {donutData.map((entry, index) => (
+                            <Cell key={`cell-${entry.name}`} fill={donutColors[index % donutColors.length]} />
                           ))}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {drilldown === 'healthy' && (
-                  <ul className="drilldown-list">
-                    {HEALTHY_VEHICLES.map((vehicle) => (
-                      <li key={vehicle.id} className="drilldown-item">
-                        <div>
-                          <strong>{vehicle.label}</strong>
-                          <p className="muted small">{vehicle.location}</p>
-                        </div>
-                        <span className="pill pill-success">No active DTCs</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div className="donut-legend">
+                  <div className="legend-item">
+                    <span className="legend-color healthy"></span>
+                    <span>Healthy</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-color predictive"></span>
+                    <span>Predictive Maintenance</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-color tire"></span>
+                    <span>Tire Health Issues</span>
+                  </div>
+                </div>
               </div>
             </div>
-          </section>
+
+            <div className="bottom-panels">
+              <div className="panel vehicles-panel" onClick={handleNavigateToFleetVehicles} style={{ cursor: 'pointer' }}>
+                <div className="panel-header">
+                  <h3 className="panel-title">
+                    <span className="panel-icon">▲</span>
+                    Vehicles Requiring Attention
+                  </h3>
+                  <button className="view-all-btn" onClick={(e) => { e.stopPropagation(); handleNavigateToFleetVehicles(); }}>
+                    View All
+                  </button>
+                </div>
+                <div className="vehicles-list">
+                  {VEHICLES_REQUIRING_ATTENTION.slice(0, 3).map((vehicle) => (
+                    <div key={vehicle.id} className="vehicle-item">
+                      <span className="vehicle-icon">🚛</span>
+                      <div className="vehicle-info">
+                        <div className="vehicle-name">{vehicle.name}</div>
+                        <div className="vehicle-location">{vehicle.location}</div>
+                      </div>
+                      <span className={`status-badge ${vehicle.status.toLowerCase()}`}>
+                        {vehicle.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel notifications-panel">
+                <div className="panel-header">
+                  <h3 className="panel-title">
+                    <span className="panel-icon">🔔</span>
+                    Notifications
+                  </h3>
+                  <button className="view-all-btn">View All</button>
+                </div>
+                <div className="notifications-list">
+                  {NOTIFICATIONS.map((notification) => (
+                    <div key={notification.id} className="notification-item">
+                      <div className="notification-title">{notification.title}</div>
+                      <div className="notification-summary">{notification.summary}</div>
+                      <div className="notification-time">{notification.time}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
-        {activeTab === 'Maintenance' && (
-          <section className="maintenance-panel">
-            <div className="panel-head">
-              <h2>Maintenance</h2>
-              <p className="muted small">Latest work orders synced from Bridgestone Firestone service.</p>
+        {activeTab === 'Fleet Vehicles' && (
+          <div className="fleet-vehicles-container">
+            <div className="fleet-vehicles-header">
+              <div>
+                <h1 className="page-title">Fleet Vehicles</h1>
+                <p className="page-subtitle">Monitor and manage your entire fleet</p>
+              </div>
             </div>
-            <div className="maintenance-list">
-              {MAINTENANCE_ITEMS.map((item) => (
-                <article key={item.id} className="maintenance-card">
-                  <div>
-                    <p className="vehicle-label">{item.vehicleLabel}</p>
-                    <p className="muted small">{item.dtcSummary}</p>
+
+            <div className="fleet-vehicles-controls">
+              <div className="search-container">
+                <span className="search-icon">🔍</span>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search vehicles..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="filter-container">
+                <button
+                  className={`filter-btn ${filterStatus === 'warning' ? 'active' : ''}`}
+                  onClick={() => setFilterStatus(filterStatus === 'warning' ? 'all' : 'warning')}
+                >
+                  <span className="filter-icon">🔽</span>
+                  Warning
+                </button>
+              </div>
+            </div>
+
+            <div className="vehicles-grid">
+              {filteredVehicles.map((vehicle) => (
+                <div key={vehicle.id} className="vehicle-card">
+                  <div className="vehicle-card-header">
+                    <span className="vehicle-card-icon">🚛</span>
+                    <span className="vehicle-card-warning">Warning</span>
                   </div>
-                  <div className="maintenance-meta">
-                    <span
-                      className={`pill ${
-                        item.status === 'Completed'
-                          ? 'pill-success'
-                          : item.status === 'Scheduled'
-                          ? 'pill-warning'
-                          : 'pill-info'
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                    <span className="muted small">{item.scheduledFor}</span>
-                    <span className="muted small">{item.location}</span>
-                    <span className="pill pill-outline">{item.source}</span>
+                  <div className="vehicle-card-body">
+                    <h3 className="vehicle-card-name">{vehicle.name}</h3>
+                    <p className="vehicle-card-plate">{vehicle.licensePlate}</p>
+                    <div className="health-score-section">
+                      <div className="health-score-label">Health Score</div>
+                      <div className="health-score-bar-container">
+                        <div
+                          className="health-score-bar"
+                          style={{
+                            width: `${vehicle.healthScore}%`,
+                            backgroundColor: vehicle.healthScore < 60 ? '#FF5630' : '#FFAB00',
+                          }}
+                        ></div>
+                      </div>
+                      <div className="health-score-value">{vehicle.healthScore}%</div>
+                    </div>
+                    <div className="vehicle-card-meta">
+                      <div className="meta-item">
+                        <span className="meta-icon">📍</span>
+                        <span>{vehicle.location}</span>
+                      </div>
+                      <div className="meta-item">
+                        <span className="meta-icon">🕐</span>
+                        <span>{vehicle.lastUpdated}</span>
+                      </div>
+                    </div>
+                    <div className="vehicle-card-tags">
+                      {vehicle.dtcCodes > 0 && (
+                        <span className="tag">{vehicle.dtcCodes} DTC Code{vehicle.dtcCodes > 1 ? 's' : ''}</span>
+                      )}
+                      {vehicle.alerts > 0 && (
+                        <span className="tag">{vehicle.alerts} Alert{vehicle.alerts > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
                   </div>
-                </article>
+                </div>
               ))}
             </div>
-          </section>
+          </div>
+        )}
+
+        {(activeTab === 'Notifications' || activeTab === 'Appointments' || activeTab === 'Service Stations' || activeTab === 'Settings') && (
+          <div className="placeholder-page">
+            <h2>{activeTab}</h2>
+            <p>This section is coming soon...</p>
+          </div>
         )}
       </main>
     </div>
