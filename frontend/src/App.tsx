@@ -11,6 +11,8 @@ import {
   PieChart,
   Pie,
   Cell,
+  BarChart,
+  Bar,
 } from 'recharts';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api';
@@ -21,6 +23,9 @@ interface DashboardSummary {
   problematicVehicles: number;
   healthyVehicles: number;
   appointmentsBooked: number;
+  fleetHealthScore: number; // percentage 0-100
+  activeAlerts: number;
+  serviceBookings: number;
 }
 
 interface DeviceEvent {
@@ -246,10 +251,14 @@ const HEALTHY_VEHICLES: ProblemVehicle[] = [
 ];
 
 const STATIC_SUMMARY: DashboardSummary = {
-  totalVehicles: PROBLEM_VEHICLES.length + HEALTHY_VEHICLES.length,
-  problematicVehicles: PROBLEM_VEHICLES.length,
-  healthyVehicles: HEALTHY_VEHICLES.length,
-  appointmentsBooked: 3,
+  // Numbers inspired by design mocks
+  totalVehicles: 1250,
+  healthyVehicles: 1045,
+  problematicVehicles: 205,
+  appointmentsBooked: 178,
+  fleetHealthScore: 83.6,
+  activeAlerts: 205,
+  serviceBookings: 178,
 };
 
 const MAINTENANCE_ITEMS: MaintenanceItem[] = [
@@ -287,6 +296,8 @@ function App() {
   const [events, setEvents] = useState<DeviceEvent[]>(STATIC_EVENTS);
   const [activeTab, setActiveTab] = useState<NavTab>('Live');
   const [drilldown, setDrilldown] = useState<'none' | 'problematic' | 'healthy'>('none');
+  const [timeframe] = useState<'7d' | '30d' | '90d'>('7d');
+  const [segment, setSegment] = useState<'all' | 'delivery' | 'service'>('all');
 
   useEffect(() => {
     async function bootstrap() {
@@ -320,13 +331,7 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const milesTrend = useMemo(() => {
-    const baseline = summary?.totalVehicles ?? 0;
-    return ['30-Nov', '01-Dec', '02-Dec', '03-Dec', '04-Dec'].map((label, idx) => ({
-      label,
-      miles: Math.round((baseline * 80 + idx * 120) * (summary?.healthyVehicles ? 1.1 : 0.6)),
-    }));
-  }, [summary]);
+
 
   const donutData = useMemo(() => {
     if (!summary) return [];
@@ -337,6 +342,24 @@ function App() {
     ];
   }, [summary]);
 
+  const severityBarData = useMemo(
+    () => [
+      { label: 'High', value: PROBLEM_VEHICLES.filter((v) => v.dtcs.some((d) => d.severity === 'High')).length },
+      { label: 'Medium', value: PROBLEM_VEHICLES.filter((v) => v.dtcs.some((d) => d.severity === 'Medium')).length },
+      { label: 'Low', value: PROBLEM_VEHICLES.filter((v) => v.dtcs.some((d) => d.severity === 'Low')).length },
+    ],
+    [],
+  );
+
+  const maintenanceBarData = useMemo(
+    () => [
+      { label: 'Completed', value: MAINTENANCE_ITEMS.filter((m) => m.status === 'Completed').length },
+      { label: 'Scheduled', value: MAINTENANCE_ITEMS.filter((m) => m.status === 'Scheduled').length },
+      { label: 'In Progress', value: MAINTENANCE_ITEMS.filter((m) => m.status === 'In Progress').length },
+    ],
+    [],
+  );
+
   const alerts = useMemo(
     () => ALERT_ITEMS,
     [],
@@ -346,8 +369,8 @@ function App() {
     <div className="app-shell">
       <header className="top-nav">
         <div className="brand">
-          <span className="brand-mark">Azuga</span>uga
-          <span className="cid">CID: 28907</span>
+          <span className="brand-mark">Azuga</span>Azuga
+          <span className="cid">CID: 1059</span>
         </div>
         <nav>
           {navItems.map((item) => (
@@ -466,62 +489,104 @@ function App() {
           <section className="dashboard-panel">
             <div className="panel-head">
               <h2>Dashboard</h2>
-              <div className="stats">
-                <button
-                  type="button"
-                  className="stat-card"
-                  onClick={() => setDrilldown('problematic')}
-                >
-                  <p className="stat-label">Problematic Vehicles</p>
-                  <p className="stat-value warning">{summary?.problematicVehicles ?? '-'}</p>
-                </button>
-                <button
-                  type="button"
-                  className="stat-card"
-                  onClick={() => setDrilldown('healthy')}
-                >
-                  <p className="stat-label">No Issue Vehicles</p>
-                  <p className="stat-value ok">{summary?.healthyVehicles ?? '-'}</p>
-                </button>
-                <div className="stat-card passive">
-                  <p className="stat-label">Total Active</p>
-                  <p className="stat-value">{summary?.totalVehicles ?? '-'}</p>
-                </div>
+            </div>
+
+            <div className="kpi-row">
+              <button
+                type="button"
+                className="kpi-card"
+                onClick={() => setDrilldown('none')}
+              >
+                <p className="kpi-label">Total Vehicles</p>
+                <p className="kpi-value">{summary?.totalVehicles ?? '-'}</p>
+                <p className="kpi-sub">Fleet size across all segments</p>
+              </button>
+              <button
+                type="button"
+                className="kpi-card"
+                onClick={() => setDrilldown('healthy')}
+              >
+                <p className="kpi-label">Fleet Health Score</p>
+                <p className="kpi-value">{summary?.fleetHealthScore.toFixed(1)}%</p>
+                <p className="kpi-sub kpi-trend positive">↑ 3.2% vs last period</p>
+              </button>
+              <button
+                type="button"
+                className="kpi-card"
+                onClick={() => setActiveTab('Alerts')}
+              >
+                <p className="kpi-label">Active Alerts</p>
+                <p className="kpi-value">{summary?.activeAlerts ?? '-'}</p>
+                <p className="kpi-sub kpi-trend negative">↓ 8% after campaigns</p>
+              </button>
+              <button
+                type="button"
+                className="kpi-card"
+                onClick={() => setActiveTab('Maintenance')}
+              >
+                <p className="kpi-label">Service Bookings</p>
+                <p className="kpi-value">{summary?.serviceBookings ?? '-'}</p>
+                <p className="kpi-sub kpi-trend positive">↑ 24% vs last month</p>
+              </button>
+            </div>
+
+            <div className="stats">
+              <button
+                type="button"
+                className="stat-card"
+                onClick={() => setDrilldown('problematic')}
+              >
+                <p className="stat-label">Problematic Vehicles</p>
+                <p className="stat-value warning">{summary?.problematicVehicles ?? '-'}</p>
+              </button>
+              <button
+                type="button"
+                className="stat-card"
+                onClick={() => setDrilldown('healthy')}
+              >
+                <p className="stat-label">No Issue Vehicles</p>
+                <p className="stat-value ok">{summary?.healthyVehicles ?? '-'}</p>
+              </button>
+              <div className="stat-card passive">
+                <p className="stat-label">Total Active</p>
+                <p className="stat-value">{summary?.totalVehicles ?? '-'}</p>
               </div>
             </div>
+
+           
 
             <div className="chart-card">
               <div className="chart-head">
                 <div>
-                  <p className="muted">Miles Driven</p>
-                  <strong>Total Miles</strong>
+                  <strong>Vehicle Health Status</strong>
+                  <p className="muted small">
+                    Healthy vs problematic vehicles ({summary?.healthyVehicles ?? 0} healthy /{' '}
+                    {summary?.problematicVehicles ?? 0} problematic)
+                  </p>
                 </div>
-                <select>
-                  <option>Our Goal</option>
-                  <option>Last Week</option>
-                </select>
-              </div>
-              <div className="chart-body">
-                <ResponsiveContainer height={180} width="100%">
-                  <AreaChart data={milesTrend}>
-                    <defs>
-                      <linearGradient id="milesGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="label" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="miles" stroke="#1D4ED8" fillOpacity={1} fill="url(#milesGradient)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="chart-card">
-              <div className="chart-head">
-                <strong>Vehicle Utilization (last 7 days)</strong>
+                <div className="pill-toggle-group">
+                  <button
+                    type="button"
+                    className={`pill-toggle ${segment === 'all' ? 'active' : ''}`}
+                    onClick={() => setSegment('all')}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className={`pill-toggle ${segment === 'delivery' ? 'active' : ''}`}
+                    onClick={() => setSegment('delivery')}
+                  >
+                    Delivery
+                  </button>
+                  <button
+                    type="button"
+                    className={`pill-toggle ${segment === 'service' ? 'active' : ''}`}
+                    onClick={() => setSegment('service')}
+                  >
+                    Service
+                  </button>
+                </div>
               </div>
               <div className="chart-body donut">
                 {summary ? (
@@ -543,6 +608,73 @@ function App() {
                   <span className="legend-dot warning" /> Problematic
                   <span className="legend-dot neutral" /> Unknown
                 </div>
+                <div className="chart-footer">
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => {
+                      setActiveTab('Alerts');
+                    }}
+                  >
+                    View active DTC alerts
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-head">
+                <strong>DTC severity mix</strong>
+                <span className="muted small">Last 7 days</span>
+              </div>
+              <div className="chart-body">
+                <ResponsiveContainer height={180} width="100%">
+                  <BarChart data={severityBarData}>
+                    <XAxis dataKey="label" stroke="#94a3b8" />
+                    <YAxis allowDecimals={false} stroke="#94a3b8" />
+                    <Tooltip />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                      <Cell fill="#ef4444" />
+                      <Cell fill="#f97316" />
+                      <Cell fill="#22c55e" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="chart-footer">
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => setDrilldown('problematic')}
+                >
+                  Drill into vehicles with DTCs
+                </button>
+              </div>
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-head">
+                <strong>Maintenance pipeline</strong>
+                <span className="muted small">From Firestone & manual bookings</span>
+              </div>
+              <div className="chart-body">
+                <ResponsiveContainer height={180} width="100%">
+                  <BarChart data={maintenanceBarData}>
+                    <XAxis dataKey="label" stroke="#94a3b8" />
+                    <YAxis allowDecimals={false} stroke="#94a3b8" />
+                    <Tooltip />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#0ea5e9" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="chart-footer">
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => setActiveTab('Maintenance')}
+                >
+                  View maintenance work orders
+                </button>
               </div>
             </div>
 
