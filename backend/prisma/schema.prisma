@@ -1,0 +1,129 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  adminEmail   String
+  adminPhone   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  vehicles     Vehicle[]
+  users        User[]
+  appointments Appointment[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  customer     Customer @relation(fields: [customerId], references: [id])
+  customerId   String
+  email        String   @unique
+  role         String
+  displayName  String
+  mobilePushId String?
+  createdAt    DateTime @default(now())
+}
+
+model Vehicle {
+  id             String        @id @default(cuid())
+  customer       Customer      @relation(fields: [customerId], references: [id])
+  customerId     String
+  vin            String        @unique
+  label          String
+  driverName     String?
+  driverPushId   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  events         DeviceEvent[]
+  dtcCodes       DtcCode[]
+  trips          Trip[]
+  appointments   Appointment[]
+}
+
+model Trip {
+  id                 String   @id @default(cuid())
+  vehicle            Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId          String
+  tripStartedAt      DateTime
+  tripEndedAt        DateTime?
+  lastLat            Float?
+  lastLng            Float?
+  lastAddress        String?
+  mileage            Float?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  dtcCodes           DtcCode[]
+}
+
+model DeviceEvent {
+  id          String    @id @default(cuid())
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id])
+  vehicleId   String
+  eventType   EventType
+  payload     Json
+  occurredAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+}
+
+model DtcCode {
+  id            String       @id @default(cuid())
+  vehicle       Vehicle      @relation(fields: [vehicleId], references: [id])
+  vehicleId     String
+  trip          Trip?        @relation(fields: [tripId], references: [id])
+  tripId        String?
+  code          String
+  description   String?
+  severity      String?
+  detectedAt    DateTime     @default(now())
+  resolvedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  notificationLogs NotificationLog[]
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  customer       Customer          @relation(fields: [customerId], references: [id])
+  customerId     String
+  vehicle        Vehicle           @relation(fields: [vehicleId], references: [id])
+  vehicleId      String
+  dtcCodes       String
+  status         AppointmentStatus @default(PENDING)
+  bookedBy       String
+  bookingLink    String?
+  scheduledDate  DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model NotificationLog {
+  id           String   @id @default(cuid())
+  dtc          DtcCode  @relation(fields: [dtcId], references: [id])
+  dtcId        String
+  channel      String
+  success      Boolean
+  message      String?
+  createdAt    DateTime @default(now())
+}
+
+enum EventType {
+  TRIP_START
+  GPS
+  DTC
+  TRIP_END
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
