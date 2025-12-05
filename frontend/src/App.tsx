@@ -23,13 +23,13 @@ interface DashboardSummary {
 }
 
 const STATIC_SUMMARY: DashboardSummary = {
-  totalVehicles: 70,
-  healthyVehicles: 43,
-  problematicVehicles: 7,
+  totalVehicles: 100,
+  healthyVehicles: 49,
+  problematicVehicles: 3,
   appointmentsBooked: 9,
-  fleetHealthScore: 82,
-  activeAlerts: 7,
-  serviceBookings: 3,
+  fleetHealthScore: 87,
+  activeAlerts: 56,
+  serviceBookings: 2,
 };
 
 const donutColors = ['#36B37E', '#FFAB00', '#FF5630'];
@@ -105,7 +105,7 @@ type Vehicle = {
 };
 
 const FLEET_VEHICLES: Vehicle[] = [
-  {
+  { 
     id: '1',
     name: 'Peterbilt 579 #102',
     licensePlate: 'TX-9583-PB',
@@ -169,7 +169,7 @@ const FLEET_VEHICLES: Vehicle[] = [
     id: '3',
     name: 'Volvo #150',
     licensePlate: 'TX-1043-VO',
-    healthScore: 58,
+    healthScore: 78,
     location: 'San Antonio, TX',
     lastUpdated: '10 min ago',
     alerts: 1,
@@ -256,6 +256,154 @@ const FLEET_VEHICLES: Vehicle[] = [
   {
     id: '7',
     name: 'Mack Anthem #106',
+    licensePlate: 'TX-7890-MK',
+    healthScore: 35,
+    location: 'Houston, TX',
+    lastUpdated: '1 hour ago',
+    dtcCodes: 1,
+    alerts: 1,
+    status: 'critical',
+    mileage: 298765,
+    vehicleType: 'Semi Truck',
+    dtcDetails: [
+      {
+        code: 'P0300',
+        description: 'Engine Misfire Detected',
+        prediction: 'Predicted failure: 1-3 days',
+        confidence: 96,
+        action: 'Immediate inspection required',
+      },
+    ],
+    services: [],
+  },
+  { 
+    id: '8',
+    name: 'Peterbilt 579 #103',
+    licensePlate: 'TX-9583-PB',
+    healthScore: 78,
+    location: 'Dallas, TX',
+    lastUpdated: '12 min ago',
+    dtcCodes: 1,
+    alerts: 1,
+    status: 'warning',
+    mileage: 287432,
+    vehicleType: 'Semi Truck',
+    dtcDetails: [
+      {
+        code: 'P0420',
+        description: 'Catalyst System Efficiency Below Threshold',
+        prediction: 'Predicted failure: 14-21 days',
+        confidence: 78,
+        action: 'Inspect catalytic converter',
+      },
+    ],
+    services: [
+      {
+        type: 'Transmission Service',
+        dueDate: '2024-02-28',
+        dueMileage: 295000,
+        priority: 'medium',
+      },
+    ],
+  },
+  {
+    id: '9',
+    name: 'Volvo VNL 860 #105',
+    licensePlate: 'TX-3892-VL',
+    healthScore: 81,
+    location: 'Austin, TX',
+    lastUpdated: '3 min ago',
+    dtcCodes: 1,
+    alerts: 2,
+    status: 'warning',
+    mileage: 245123,
+    vehicleType: 'Semi Truck',
+    dtcDetails: [],
+    services: [
+      {
+        type: 'Oil Change',
+        dueDate: '2024-01-15',
+        dueMileage: 250000,
+        priority: 'high',
+      },
+    ],
+  },
+  {
+    id: '10',
+    name: 'Volvo #151',
+    licensePlate: 'TX-1043-VO',
+    healthScore: 58,
+    location: 'San Antonio, TX',
+    lastUpdated: '10 min ago',
+    alerts: 1,
+    dtcCodes: 0,
+    status: 'warning',
+    mileage: 312456,
+    vehicleType: 'Semi Truck',
+    dtcDetails: [],
+    services: [
+      {
+        type: 'Brake Inspection',
+        dueDate: '2024-01-20',
+        priority: 'high',
+      },
+    ],
+  },
+  {
+    id: '11',
+    name: 'Freightliner Cascadia #102',
+    licensePlate: 'TX-4521-FL',
+    healthScore: 78,
+    location: 'Houston, TX',
+    lastUpdated: '5 min ago',
+    dtcCodes: 2,
+    alerts: 3,
+    status: 'critical',
+    mileage: 198765,
+    vehicleType: 'Semi Truck',
+    dtcDetails: [ ],
+    services: [
+      {
+        type: 'Engine Service',
+        dueDate: '2024-01-10',
+        priority: 'high',
+      },
+    ],
+  },
+  // Add more vehicles to reach a realistic fleet size
+  {
+    id: '12',
+    name: 'Kenworth T680 #202',
+    licensePlate: 'TX-7821-KW',
+    healthScore: 85,
+    location: 'El Paso, TX',
+    lastUpdated: '1 hour ago',
+    dtcCodes: 0,
+    alerts: 0,
+    status: 'healthy',
+    mileage: 156789,
+    vehicleType: 'Semi Truck',
+    dtcDetails: [],
+    services: [],
+  },
+  {
+    id: '13',
+    name: 'Mack Anthem #302',
+    licensePlate: 'TX-4523-MK',
+    healthScore: 88,
+    location: 'Fort Worth, TX',
+    lastUpdated: '2 hours ago',
+    dtcCodes: 0,
+    alerts: 0,
+    status: 'healthy',
+    mileage: 134567,
+    vehicleType: 'Semi Truck',
+    dtcDetails: [],
+    services: [],
+  },
+  {
+    id: '14',
+    name: 'Mack Anthem #107',
     licensePlate: 'TX-7890-MK',
     healthScore: 35,
     location: 'Houston, TX',
@@ -724,7 +872,7 @@ function App() {
         </div>
               <div className="dashboard-status">
                 <span className="status-indicator">
-                  <span className="status-icon">⚡</span>
+                  {/* <span className="status-icon">⚡</span> */}
                 
                 </span>
                 <span className="last-updated">Last updated: Just now</span>
