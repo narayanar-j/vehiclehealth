@@ -1,0 +1,13 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "Vehicle Health Backend API",
+  "includeVersion": true,
+  "readme": "../README.md",
+  "exclude": ["**/*.test.ts", "**/*.spec.ts", "node_modules"],
+  "theme": "default",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true
+}
+
